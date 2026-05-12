@@ -1,6 +1,6 @@
 import time
 import requests
-import feedparser
+import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 
 HEADERS = {
@@ -15,20 +15,52 @@ HEADERS = {
     "Connection": "keep-alive",
 }
 
-RSS_URL = "https://www.eltiempo.com/rss/portada.xml"
+RSS_URLS = [
+    "https://www.eltiempo.com/rss/portada.xml",
+    "https://www.eltiempo.com/rss/colombia.xml",
+    "https://www.eltiempo.com/rss/nacion.xml",
+]
+# Google News RSS as last-resort fallback (links back to El Tiempo articles)
+GOOGLE_NEWS_RSS = (
+    "https://news.google.com/rss/search"
+    "?q=site:eltiempo.com&hl=es-419&gl=CO&ceid=CO:es-419"
+)
 HOME_URL = "https://www.eltiempo.com"
 
 
-def _fetch_via_rss(limit=15):
-    feed = feedparser.parse(RSS_URL)
+def _parse_rss_xml(content):
+    root = ET.fromstring(content)
+    channel = root.find("channel")
+    items = channel.findall("item") if channel is not None else root.findall(".//item")
     articles = []
-    for entry in feed.entries[:limit]:
-        articles.append({
-            "title": entry.get("title", "").strip(),
-            "url": entry.get("link", ""),
-            "summary": BeautifulSoup(entry.get("summary", ""), "html.parser").get_text(strip=True),
-        })
+    for item in items:
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        description = item.findtext("description") or ""
+        summary = BeautifulSoup(description, "html.parser").get_text(strip=True)
+        if title and link:
+            articles.append({"title": title, "url": link, "summary": summary})
     return articles
+
+
+def _fetch_via_rss(limit=15):
+    for rss_url in RSS_URLS:
+        try:
+            resp = requests.get(rss_url, headers=HEADERS, timeout=15)
+            resp.raise_for_status()
+            articles = _parse_rss_xml(resp.content)
+            if articles:
+                return articles[:limit]
+        except Exception:
+            continue
+
+    # Last resort: Google News RSS for El Tiempo
+    try:
+        resp = requests.get(GOOGLE_NEWS_RSS, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+        return _parse_rss_xml(resp.content)[:limit]
+    except Exception:
+        return []
 
 
 def _fetch_via_html(limit=15):
@@ -39,7 +71,6 @@ def _fetch_via_html(limit=15):
     seen_urls = set()
     articles = []
 
-    # Try common article link patterns on eltiempo.com
     selectors = [
         "article a[href]",
         "h2 a[href]",
@@ -57,7 +88,6 @@ def _fetch_via_html(limit=15):
                 href = HOME_URL + href
             if href in seen_urls or HOME_URL not in href:
                 continue
-            # Skip non-article URLs (section index pages, etc.)
             if href.count("/") < 4:
                 continue
             title = tag.get_text(strip=True)
@@ -78,7 +108,6 @@ def fetch_article_text(url, max_chars=3000):
         soup = BeautifulSoup(resp.text, "lxml")
         for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
-        # Prefer the <article> body
         body = (
             soup.find("article")
             or soup.find(class_=lambda c: c and any(
@@ -93,7 +122,6 @@ def fetch_article_text(url, max_chars=3000):
 
 def get_top_news(n=10):
     """Return up to n articles with content fetched."""
-    # Try RSS first; fall back to HTML scraping
     articles = _fetch_via_rss(limit=n + 5)
     if len(articles) < 3:
         articles = _fetch_via_html(limit=n + 5)
