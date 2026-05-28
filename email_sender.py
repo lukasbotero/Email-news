@@ -75,9 +75,12 @@ def _build_plain(articles, date_str):
     return "\n".join(lines)
 
 
+GMAIL_USER = "lbotero@gmail.com"
+
+
 def send_email(articles, to_email):
-    gmail_user = os.environ["GMAIL_USER"]
     gmail_password = os.environ["GMAIL_APP_PASSWORD"]
+    gmail_user = GMAIL_USER
 
     today = date.today()
     date_str = f"{today.day} de {MONTHS_ES[today.month]} de {today.year}"
