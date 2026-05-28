@@ -1,15 +1,14 @@
 import os
-import google.generativeai as genai
+from google import genai
 
-MODEL = "gemini-1.5-flash"
-
-
-def _get_model():
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    return genai.GenerativeModel(MODEL)
+MODEL = "gemini-2.0-flash"
 
 
-def _summarize_one(model, title, content):
+def _get_client():
+    return genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+
+def _summarize_one(client, title, content):
     prompt = (
         f"Resume esta noticia en español en máximo 50 palabras. "
         f"Sé conciso y captura los hechos clave.\n\n"
@@ -17,12 +16,12 @@ def _summarize_one(model, title, content):
         f"Contenido: {content[:2500]}\n\n"
         f"Resumen (máx. 50 palabras):"
     )
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(model=MODEL, contents=prompt)
     return response.text.strip()
 
 
 def rank_and_summarize(articles, top_n=10):
-    model = _get_model()
+    client = _get_client()
 
     candidates = "\n".join(
         f"{i+1}. {a['title']}"
@@ -36,7 +35,7 @@ def rank_and_summarize(articles, top_n=10):
         f"Responde SOLO con los números en orden de importancia, separados por comas. Ejemplo: 3,1,7,2,...\n\n"
         f"Noticias:\n{candidates}"
     )
-    rank_response = model.generate_content(ranking_prompt)
+    rank_response = client.models.generate_content(model=MODEL, contents=ranking_prompt)
     raw = rank_response.text.strip()
 
     try:
@@ -60,7 +59,7 @@ def rank_and_summarize(articles, top_n=10):
     result = []
     for i, article in enumerate(ranked):
         content = article.get("content", "") or article.get("summary", "")
-        summary = _summarize_one(model, article["title"], content)
+        summary = _summarize_one(client, article["title"], content)
         result.append({
             "rank": i + 1,
             "title": article["title"],
