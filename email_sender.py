@@ -16,7 +16,7 @@ def _build_html(articles, date_str):
     for a in articles:
         rows += f"""
         <div style="margin-bottom:28px;padding:16px 20px;border-left:4px solid #c0392b;background:#fafafa;border-radius:0 6px 6px 0;">
-          <p style="margin:0 0 4px;font-size:13px;color:#888;">#{a['rank']}</p>
+          <p style="margin:0 0 4px;font-size:11px;color:#c0392b;text-transform:uppercase;letter-spacing:1px;">{a.get('category', '')}</p>
           <h2 style="margin:0 0 8px;font-size:17px;line-height:1.35;">
             <a href="{a['url']}" style="color:#c0392b;text-decoration:none;">{a['title']}</a>
           </h2>

@@ -26,6 +26,5 @@ jobs:
 
       - name: Send daily news email
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python main.py
