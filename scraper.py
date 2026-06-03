@@ -17,6 +17,10 @@ HEADERS = {
 
 RSS_URL = "https://www.eltiempo.com/rss/portada.xml"
 HOME_URL = "https://www.eltiempo.com"
+GOOGLE_NEWS_RSS = (
+    "https://news.google.com/rss/search"
+    "?q=site:eltiempo.com&hl=es-419&gl=CO&ceid=CO:es-419"
+)
 
 
 def _fetch_via_rss(limit=15):
@@ -28,6 +32,21 @@ def _fetch_via_rss(limit=15):
             "url": entry.get("link", ""),
             "summary": BeautifulSoup(entry.get("summary", ""), "html.parser").get_text(strip=True),
         })
+    return articles
+
+
+def _fetch_via_google_news(limit=15):
+    """Fallback: Google News RSS index of eltiempo.com articles."""
+    feed = feedparser.parse(GOOGLE_NEWS_RSS)
+    articles = []
+    for entry in feed.entries[:limit]:
+        url = entry.get("link", "")
+        # Google News links redirect to the original article
+        title = entry.get("title", "").strip()
+        # Strip source suffix added by Google (e.g. " - El Tiempo")
+        title = title.rsplit(" - ", 1)[0].strip()
+        if title and url:
+            articles.append({"title": title, "url": url, "summary": ""})
     return articles
 
 
@@ -93,10 +112,12 @@ def fetch_article_text(url, max_chars=3000):
 
 def get_top_news(n=10):
     """Return up to n articles with content fetched."""
-    # Try RSS first; fall back to HTML scraping
+    # Try El Tiempo RSS → HTML scraping → Google News RSS
     articles = _fetch_via_rss(limit=n + 5)
     if len(articles) < 3:
         articles = _fetch_via_html(limit=n + 5)
+    if len(articles) < 3:
+        articles = _fetch_via_google_news(limit=n + 5)
 
     result = []
     for article in articles[:n + 5]:
